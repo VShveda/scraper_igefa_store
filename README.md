@@ -40,14 +40,8 @@ This project is a web scraper designed to collect product information from the I
 
 
 ## Example Commands
-1. To run the main script:
+
    ```bash
    python main.py
    ```
 
-2. If you want to save data to CSV:
-   ```bash
-   python .\app\utils.py --save-to-csv
-
-   ```
-   
