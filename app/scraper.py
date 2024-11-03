@@ -1,4 +1,12 @@
+import asyncio
+import time
+
 import aiohttp
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium import webdriver
+from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 
 from app.storage import DataStorage
@@ -8,7 +16,7 @@ BESET_URL = "https://store.igefa.de/c/kategorien/f4SXre6ovVohkGNrAvh3zR"
 
 
 class IgefaScraper:
-    def __init__(self, storage: DataStorage) -> None:
+    def __init__(self, storage: DataStorage = DataStorage("../progress.json")) -> None:
         self.base_url = BESET_URL
         self.storage = storage
 
@@ -17,22 +25,65 @@ class IgefaScraper:
         async with session.get(url) as response:
             return await response.text()
 
-    # async def get_all_product_urls(self):
-    #     async with aiohttp.ClientSession() as session:
-    #         page_number = 1
-    #         all_product_urls = []
-    #
-    #         while True:
-    #             page_url = f"{self.base_url}?page={page_number}"
-    #             product_urls = await self.get_product_urls(session, page_url)
-    #
-    #             if not product_urls:
-    #                 break
-    #
-    #             all_product_urls.extend(product_urls)
-    #             page_number += 1
-    #
-    #         return all_product_urls
+    async def fetch_page_with_selenium(self, driver: WebDriver) -> str:
+        return await asyncio.to_thread(self.selenium_fetch, driver)
+
+    async def get_all_product_urls(self) -> list[str]:
+        page_number = 1
+        all_product_urls = []
+        driver = webdriver.Chrome()
+
+        while True:
+            page_url = f"{self.base_url}?page={page_number}"
+            driver.get(page_url)
+            time.sleep(2)
+            IgefaScraper.accept_cookies(driver)
+            product_urls = await self.fetch_page_with_selenium(driver)
+            all_product_urls.extend(product_urls)
+            if page_number == 3:
+                break
+            page_number += 1
+
+        return all_product_urls
+
+    @staticmethod
+    def accept_cookies(driver: WebDriver) -> None:
+        try:
+            accept_button = WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.CSS_SELECTOR,
+                        "a#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+                    )
+                )
+            )
+            accept_button.click()
+            print("Cookies accepted")
+        except Exception:
+            pass
+
+    @staticmethod
+    def selenium_fetch(driver: WebDriver) -> list[str]:
+        urls_products = []
+        for num in range(1, 3):
+            selector = f"div:nth-child({num}) > div > div > div.ProductCard_productDescription__e4363 > span > span"
+            WebDriverWait(driver, 15).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+            )
+            product_card = driver.find_element(By.CSS_SELECTOR, selector)
+            product_card.click()
+            time.sleep(2)
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            try:
+                supplier_url = soup.select_one("head > link[rel=canonical]")["href"]
+                urls_products.append(supplier_url)
+                print(supplier_url)
+            except AttributeError:
+                print("Supplier URL not found for product.")
+
+            driver.back()
+        print(urls_products)
+        return urls_products
 
     @staticmethod
     async def parse_product_page(html: str) -> dict:
@@ -117,7 +168,7 @@ class IgefaScraper:
             "Original Data Column 3 (Add. Description)": data_column_3,
         }
 
-    async def scrape_products(self, urls):
+    async def scrape_products(self, urls: list[str]) -> None:
         async with aiohttp.ClientSession() as session:
             for url in urls:
                 if self.storage.data.get(url):
