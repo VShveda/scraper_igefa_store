@@ -39,7 +39,7 @@ class IgefaScraper(IgefaScraperLoaderProgressUrl):
         time.sleep(2)
         IgefaScraper.accept_cookies(driver)
         while True:
-            page_url = f"{self.base_url}?limit=20&page={page_number}"
+            page_url = f"{self.base_url}?limit=10&page={page_number}"
             driver.get(page_url)
             try:
                 product_urls = await self.fetch_page_with_selenium(driver)
@@ -72,7 +72,7 @@ class IgefaScraper(IgefaScraperLoaderProgressUrl):
     @staticmethod
     def selenium_fetch(driver: WebDriver) -> list[str]:
         urls_products = []
-        for num in range(1, 5):
+        for num in range(1, 11):
             selector = (
                 f"div:nth-child({num}) > div > div > "
                 f"div.ProductCard_productDescription__e4363 > span > span"
