@@ -9,16 +9,19 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 
-from app.storage import DataStorage
-
+from app.storage import DataStorage, IgefaScraperLoaderProgressUrl
 
 BESET_URL = "https://store.igefa.de/c/kategorien/f4SXre6ovVohkGNrAvh3zR"
 
 
-class IgefaScraper:
-    def __init__(self, storage: DataStorage = DataStorage("../progress.json")) -> None:
+class IgefaScraper(IgefaScraperLoaderProgressUrl):
+    def __init__(
+            self,
+            storage: DataStorage = DataStorage("../progress.json")
+    ) -> None:
         self.base_url = BESET_URL
         self.storage = storage
+        super().__init__()
 
     @staticmethod
     async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
@@ -29,18 +32,22 @@ class IgefaScraper:
         return await asyncio.to_thread(self.selenium_fetch, driver)
 
     async def get_all_product_urls(self) -> list[str]:
-        page_number = 1
+        page_number = self.last_page
         all_product_urls = []
         driver = webdriver.Chrome()
-
+        driver.get(self.base_url)
+        time.sleep(2)
+        IgefaScraper.accept_cookies(driver)
         while True:
-            page_url = f"{self.base_url}?page={page_number}"
+            page_url = f"{self.base_url}?limit=20&page={page_number}"
             driver.get(page_url)
-            time.sleep(2)
-            IgefaScraper.accept_cookies(driver)
-            product_urls = await self.fetch_page_with_selenium(driver)
+            try:
+                product_urls = await self.fetch_page_with_selenium(driver)
+            except Exception:
+                product_urls = []
+            self.save_progress(product_urls, page_number)
             all_product_urls.extend(product_urls)
-            if page_number == 3:
+            if not product_urls:
                 break
             page_number += 1
 
@@ -60,13 +67,16 @@ class IgefaScraper:
             accept_button.click()
             print("Cookies accepted")
         except Exception:
-            pass
+            print("Cookies already accepted")
 
     @staticmethod
     def selenium_fetch(driver: WebDriver) -> list[str]:
         urls_products = []
-        for num in range(1, 3):
-            selector = f"div:nth-child({num}) > div > div > div.ProductCard_productDescription__e4363 > span > span"
+        for num in range(1, 5):
+            selector = (
+                f"div:nth-child({num}) > div > div > "
+                f"div.ProductCard_productDescription__e4363 > span > span"
+            )
             WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
             )
@@ -77,12 +87,10 @@ class IgefaScraper:
             try:
                 supplier_url = soup.select_one("head > link[rel=canonical]")["href"]
                 urls_products.append(supplier_url)
-                print(supplier_url)
             except AttributeError:
                 print("Supplier URL not found for product.")
 
             driver.back()
-        print(urls_products)
         return urls_products
 
     @staticmethod
