@@ -72,12 +72,12 @@ class IgefaScraper(IgefaScraperLoaderProgressUrl):
     @staticmethod
     def selenium_fetch(driver: WebDriver) -> list[str]:
         urls_products = []
-        for num in range(1, 11):
+        for num in range(1, 6):
             selector = (
                 f"div:nth-child({num}) > div > div > "
                 f"div.ProductCard_productDescription__e4363 > span > span"
             )
-            WebDriverWait(driver, 15).until(
+            WebDriverWait(driver, 25).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
             )
             product_card = driver.find_element(By.CSS_SELECTOR, selector)
